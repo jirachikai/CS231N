@@ -290,11 +290,11 @@ class FullyConnectedNet(object):
 
         grads = {}
         dx, dW, db = affine_backward(data_loss_grads, cache_scores)
+        print(self.num_layers)
 
         grads.update({"W"+str(self.num_layers): dW + self.reg*self.params["W"+str(self.num_layers)],
                       "b"+str(self.num_layers): db
             })
-
         for i in range(self.num_layers-1):
             current_layer = self.num_layers - 2 - i
             dx, dW, db = affine_relu_backward(dx, h_caches[current_layer])

@@ -261,7 +261,22 @@ class Solver(object):
         num_train = self.X_train.shape[0]
         iterations_per_epoch = max(num_train // self.batch_size, 1)
         num_iterations = self.num_epochs * iterations_per_epoch
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       e'] *= self.lr_decay
+
+        for t in range(num_iterations):
+            self._step()
+
+            # Maybe print training loss
+            if self.verbose and t % self.print_every == 0:
+                print('(Iteration %d / %d) loss: %f' % (
+                       t + 1, num_iterations, self.loss_history[-1]))
+
+            # At the end of every epoch, increment the epoch counter and decay
+            # the learning rate.
+            epoch_end = (t + 1) % iterations_per_epoch == 0
+            if epoch_end:
+                self.epoch += 1
+                for k in self.optim_configs:
+                    self.optim_configs[k]['learning_rate'] *= self.lr_decay
 
             # Check train and val accuracy on the first iteration, the last
             # iteration, and at the end of each epoch.
