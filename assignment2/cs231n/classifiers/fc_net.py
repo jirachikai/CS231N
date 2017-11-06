@@ -4,6 +4,7 @@ import numpy as np
 
 from cs231n.layers import *
 from cs231n.layer_utils import *
+import copy
 
 
 class TwoLayerNet(object):
@@ -190,6 +191,9 @@ class FullyConnectedNet(object):
         for i, current in enumerate(hidden_dims):
             self.params["W"+str(i+1)] = weight_scale * np.random.randn(last, current)
             self.params["b"+str(i+1)] = np.zeros(current)
+            if self.use_batchnorm:
+                self.params["gamma"+str(i+1)] =  np.ones(current)
+                self.params["beta"+str(i+1)]  =  np.ones(current)
             last = current
         self.params["W"+str(self.num_layers)] = weight_scale * np.random.randn(hidden_dims[-1], num_classes)
         self.params["b"+str(self.num_layers)] = np.zeros(num_classes)
@@ -213,7 +217,11 @@ class FullyConnectedNet(object):
         # pass of the second batch normalization layer, etc.
         self.bn_params = []
         if self.use_batchnorm:
-            self.bn_params = [{'mode': 'train'} for i in range(self.num_layers - 1)]
+            bn_param = {'mode': 'train',
+                        'running_mean' : 0.0,
+                        'running_var' : 0.0
+                        }
+            self.bn_params = [copy.copy(bn_param) for i in range(self.num_layers - 1)]
 
         # Cast all parameters to the correct datatype
         for k, v in self.params.items():
@@ -256,8 +264,18 @@ class FullyConnectedNet(object):
         for i in range(self.num_layers-1):
             W_i = self.params["W"+str(i+1)]
             b_i = self.params["b"+str(i+1)]
-            h, h_cache = affine_relu_forward(h, W_i, b_i)
-            h_caches.append(h_cache)
+            if self.use_batchnorm:
+                gamma = self.params["gamma"+str(i+1)]
+                beta = self.params["beta"+str(i+1)]
+                bn_param = self.bn_params[i]
+                h, h_cache = affine_relu_bn_forward(h, W_i, b_i, gamma, beta, bn_param)
+            else:
+                h, h_cache = affine_relu_forward(h, W_i, b_i)
+            if self.use_dropout:
+                out, dropout_cache = dropout_forward(h, self.dropout_param)
+                h_caches.append((h_cache, dropout_cache))
+            else:
+                h_caches.append(h_cache)
         W_i = self.params["W"+str(self.num_layers)]
         b_i = self.params["b"+str(self.num_layers)]
         scores, cache_scores = affine_forward(h, W_i, b_i)
@@ -287,20 +305,34 @@ class FullyConnectedNet(object):
         data_loss, data_loss_grads = softmax_loss(scores, y)
         reg_loss  = 0.5 * self.reg * np.sum([np.sum(self.params["W"+str(i+1)]) for i in range(self.num_layers)])
         loss = data_loss + reg_loss
-
         grads = {}
         dx, dW, db = affine_backward(data_loss_grads, cache_scores)
-        print(self.num_layers)
 
         grads.update({"W"+str(self.num_layers): dW + self.reg*self.params["W"+str(self.num_layers)],
                       "b"+str(self.num_layers): db
             })
         for i in range(self.num_layers-1):
             current_layer = self.num_layers - 2 - i
-            dx, dW, db = affine_relu_backward(dx, h_caches[current_layer])
-            grads.update({"W"+str(current_layer+1): dW + self.reg*self.params["W"+str(current_layer+1)],
-                          "b"+str(current_layer+1): db
-            })
+            if self.use_dropout:
+                h_cache, dropout_cache = h_caches[current_layer]
+                dx = dropout_backward(dx, dropout_cache)
+            else:
+                h_cache = h_caches[current_layer]
+            if self.use_batchnorm:
+                gamma = self.params["gamma"+str(current_layer+1)]
+                beta = self.params["beta"+str(current_layer+1)]
+                bn_param = self.bn_params[current_layer]
+                dx, dW, db, dgamma, dbeta = affine_relu_bn_backward(dx, h_cache)
+                grads.update({"W"+str(current_layer+1): dW + self.reg*self.params["W"+str(current_layer+1)],
+                            "b"+str(current_layer+1): db,
+                            "gamma"+str(current_layer+1): dgamma,
+                            "beta"+str(current_layer+1): dbeta
+                })
+            else:
+                dx, dW, db = affine_relu_backward(dx, h_cache)
+                grads.update({"W"+str(current_layer+1): dW + self.reg*self.params["W"+str(current_layer+1)],
+                            "b"+str(current_layer+1): db
+                })
 
         ############################################################################
         #                             END OF YOUR CODE                             #
