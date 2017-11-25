@@ -430,21 +430,21 @@ def conv_forward_naive(x, w, b, conv_param):
     F, _, HH, WW = w.shape
     pad = conv_param.get("pad", 0)
     stride = conv_param.get("stride", 1)
+
     if pad:
         w_padding = np.zeros((N, C, H, int(conv_param["pad"])))
         x = np.concatenate((w_padding, x, w_padding), axis = 3)
         h_padding = np.zeros(((N, C, int(conv_param["pad"]), W + 2*int(conv_param["pad"]))))
         x = np.concatenate((h_padding, x, h_padding), axis = 2)
-    H_ = int(1 + (H + 2 * pad - HH) / stride)
-    W_ = int(1 + (W + 2 * pad - WW) / stride)
-    out = np.zeros((N, F, H_, W_))
-    for i in range(0, H+2*pad, stride):
-        for j in range(0, W+2*pad, stride):
-            for f in range(F):
-                print(i,j,f,HH, WW)
-                x_tmp = x[:][:][i:i+HH][j:j+WW]
-                print(x_tmp.shape)
-                out[:][f][i/stride][j/stride] = x[:][:][i:i+HH][j:j+HH].reshape(N, C*HH*WW).dot(w[f].reshape(C*HH*WW)) + b[f]
+
+    H_out = int(1 + (H + 2 * pad - HH) / stride)
+    W_out = int(1 + (W + 2 * pad - WW) / stride)
+    out = np.zeros((N, F, H_out, W_out))
+    for i in range(0, H+2*pad - HH + 1, stride):
+        for j in range(0, W+2*pad - WW + 1, stride):
+            for f in range(F): 
+                x_tmp = x[:,:,i:i+HH,j:j+WW]
+                out[:,f, int(i/stride), int(j/stride)] = x_tmp.reshape(N, C*HH*WW).dot(w[f].reshape(C*HH*WW)) + b[f]
 
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -470,7 +470,18 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
-    pass
+    x, w, b, conv_para = cache
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    dw = np.zeros(w.shape)
+    dx = np.zeros(x.shape)
+    db = np.zeros(b.shape)
+
+    for i in range(0, H+2*pad - HH + 1, stride):
+        for j in range(0, W+2*pad - WW + 1, stride):
+            for f in range(F): 
+                x_tmp = x[:,:,i:i+HH,j:j+WW]
+                out[:,f, int(i/stride), int(j/stride)] = x_tmp.reshape(N, C*HH*WW).dot(w[f].reshape(C*HH*WW)) + b[f]
     ###########################################################################
     #                             END OF YOUR CODE                            #
     ###########################################################################
